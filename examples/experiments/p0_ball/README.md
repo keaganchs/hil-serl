@@ -28,7 +28,9 @@ put-back (terminal), 0 at a failed attempt (terminal), a press hand-back or an i
   shard; their RTX 4090 alone is ~3-4x that, so ~4. Uncapped, our state-only learner ran ~300 per transition. Our cap
   counts collected transitions only: during resets (~15-20 s here) ours waits, theirs kept training.
 - **The intervener's rules** (`deploy/hil.py`, from the paper: brief corrections that steer exploration, rarer as the
-  policy improves, not carrying it to success): takeover on SAFETY (press > 200 g, pad box, soft-limit clamp, `near` = the
+  policy improves, not carrying it to success): takeover on SAFETY (press > 200 g, pad box, soft-limit clamp, `dive` = the
+  pad < 8 cm above the rest estimate coming down faster than 0.2 m/s (the guard knows the table, not the dish: a 0.35 m/s
+  learner descent pressed it 3.2 kg in rehearsal 2 before anything else reacted), `near` = the
   executed target fails a second guard with 3 cm more table margin and min_z, 3 cm less box_tol, so the learner never
   drives into a HOLD; a learner target the guard itself refuses, a one-tick IK jump of up to 5 cm seen in rehearsal 2,
   is replaced by the last safe target and is a takeover too) or STUCK (3 s in LIFT / 6 s in PUT without progress); release once no safety trigger holds, at a
