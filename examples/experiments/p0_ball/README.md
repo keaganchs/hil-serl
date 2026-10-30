@@ -15,7 +15,7 @@ pad position, and the reward is the scale's put-back rule.
 Settings (`config.py`): obs = 933's 112-d actor input, normalised with its frozen normaliser (`obs_norm_933.npz`);
 action = our 9-d interface (6 IK deltas, grasp command) at 10 Hz, repeated for 5 ticks of the 50 Hz client; an
 intervened step stores the mean of its 5 executed actions; discount 0.97, 200 steps per episode; reward 1 at a low
-put-back (terminal), 0 at a failed attempt (terminal), a press hand-back or an intervener quit (terminal).
+put-back (terminal), 0 at a failed attempt or a press hand-back (terminal).
 
 **Deviations from HIL-SERL** (besides no camera, no reward classifier and a policy instead of a human):
 - **IK action scale 0.5** (`socket_env.IK_SCALE`, user 2026-10-30): the client executes the learner's 6 IK actions x 0.5
@@ -35,8 +35,9 @@ put-back (terminal), 0 at a failed attempt (terminal), a press hand-back or an i
   drives into a HOLD; a learner target the guard itself refuses, a one-tick IK jump of up to 5 cm seen in rehearsal 2,
   is replaced by the last safe target and is a takeover too) or STUCK (3 s in LIFT / 6 s in PUT without progress); release once no safety trigger holds, at a
   lift / attempt start or after 1 s with the pad >= 8 cm above the rest estimate (never held to a put-back); at most 3
-  takeovers per episode (then stuck triggers are ignored and a safety trigger ends the episode), and a takeover not
-  released within 4 s ends it (terminal 0, the client hands back with the press relief lift and `--auto` recovers).
+  takeovers per episode (then stuck triggers are ignored and a safety trigger is a last takeover that ends the episode at
+  its release), and a takeover not released within 4 s ends it (truncated, a cut-off as max_steps; the client hands back
+  with the press relief lift and `--auto` recovers).
 
 ## Setup
 
