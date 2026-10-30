@@ -3,12 +3,13 @@ at 10 Hz (the pickle list record_demos.py writes). Same rules as the client's HI
 a decision = 5 consecutive ball ticks, its action = the mean of their executed actions, reward 1 and terminal at a low
 put-back, terminal 0 at a failed attempt, truncated at 200 decisions or where the ball mode ended. Like record_demos.py,
 only episodes that end in a put-back are kept.
-  .venv/bin/python examples/experiments/p0_ball/convert_chunks.py OUT.pkl SESSION_DIR [SESSION_DIR ...]"""
+  .venv/bin/python examples/experiments/p0_ball/convert_chunks.py OUT.pkl SESSION_DIR [SESSION_DIR ...] [--episodes 20]
+--episodes: keep the first N put-back episodes in total (record_demos.py's default is 20 demos)."""
 
+import argparse
 import glob
 import os
 import pickle
-import sys
 
 import numpy as np
 
@@ -33,13 +34,15 @@ def episodes(r):
             s = i + 1
 
 
-def convert(r):
+def convert(r, limit=None):
     out, n_ep, n_ok = [], 0, 0
     for s, e in episodes(r):
         n_ep += 1
         ok = bool(r["put"][e - 1])
         if not ok or (r["excluded"][s:e] != 0).any():  # record_demos.py keeps successes only; no HOLD-substituted actions
             continue
+        if limit is not None and n_ok >= limit:
+            break
         n_ok += 1
         idx = list(range(s, e, REPEAT))[:MAX_STEPS]
         for j, i in enumerate(idx):
@@ -58,13 +61,19 @@ def convert(r):
 
 
 if __name__ == "__main__":
-    demos = []
-    for sess in sys.argv[2:]:
+    p = argparse.ArgumentParser()
+    p.add_argument("out")
+    p.add_argument("sessions", nargs="+")
+    p.add_argument("--episodes", type=int)
+    a = p.parse_args()
+    demos, left = [], a.episodes
+    for sess in a.sessions:
         r = rows(sess)
-        if r is None:
+        if r is None or left == 0:
             continue
-        d, n_ep, n_ok = convert(r)
+        d, n_ep, n_ok = convert(r, left)
         demos += d
+        left = None if left is None else left - n_ok
         print(f"{sess}: {n_ep} episodes, {n_ok} put-backs kept, {len(d)} transitions")
-    pickle.dump(demos, open(sys.argv[1], "wb"))
-    print(f"{len(demos)} transitions -> {sys.argv[1]}")
+    pickle.dump(demos, open(a.out, "wb"))
+    print(f"{len(demos)} transitions -> {a.out}")
