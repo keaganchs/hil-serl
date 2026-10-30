@@ -30,7 +30,8 @@ put-back (terminal), 0 at a failed attempt (terminal), a press hand-back or an i
 - **The intervener's rules** (`deploy/hil.py`, from the paper: brief corrections that steer exploration, rarer as the
   policy improves, not carrying it to success): takeover on SAFETY (press > 200 g, pad box, soft-limit clamp, `near` = the
   executed target fails a second guard with 3 cm more table margin and min_z, 3 cm less box_tol, so the learner never
-  drives into a HOLD) or STUCK (3 s in LIFT / 6 s in PUT without progress); release once no safety trigger holds, at a
+  drives into a HOLD; a learner target the guard itself refuses, a one-tick IK jump of up to 5 cm seen in rehearsal 2,
+  is replaced by the last safe target and is a takeover too) or STUCK (3 s in LIFT / 6 s in PUT without progress); release once no safety trigger holds, at a
   lift / attempt start or after 1 s with the pad >= 8 cm above the rest estimate (never held to a put-back); at most 3
   takeovers per episode (then stuck triggers are ignored and a safety trigger ends the episode), and a takeover not
   released within 4 s ends it (terminal 0, the client hands back with the press relief lift and `--auto` recovers).

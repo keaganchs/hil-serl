@@ -1,6 +1,6 @@
 """Summarise a HIL session's decision log (the client's <session>/hil.jsonl, p0_grasping deploy/hil.py) in time bins:
 episodes and put-backs, interventions (the step share, the paper's per-episode rate, takeovers, their mean duration overall
-and per trigger, put-backs reached while the intervener had the arm), clipped stored actions, `near` (wide guard) steps,
+and per trigger, put-backs reached while the intervener had the arm), clipped stored actions, `near` (wide guard) steps, refused learner targets (resent the last safe one),
 press peaks, late actions, the learner's action size and pad motion.
   .venv/bin/python examples/experiments/p0_ball/hil_report.py SESSION/hil.jsonl [SESSION2/hil.jsonl ...] [--bin 600]"""
 
@@ -35,7 +35,7 @@ for r in rows:
 bins = collections.defaultdict(list)
 for r in rows:
     bins[r["bin"]].append(r)
-print("min   steps eps put  iv%  iv%/ep  n_iv  dur_s  dur by trigger [s (n)]                       put@iv clip%  near%  g_p99 g_max late%  |a_ik|  pad cm/step p50/p99")
+print("min   steps eps put  iv%  iv%/ep  n_iv  dur_s  dur by trigger [s (n)]                       put@iv clip%  near%  ref  g_p99 g_max late%  |a_ik|  pad cm/step p50/p99")
 for b, rs in sorted(bins.items()):
     ends = [r for r in rs if r["term"] or r["trunc"]]
     puts = [r for r in ends if r["r"] > 0]
@@ -52,7 +52,7 @@ for b, rs in sorted(bins.items()):
     j = np.array([r["jump"] for r in rs if not r["iv"]] or [np.nan])
     print(f"{b * a.bin / 60:4.0f}  {len(rs):5d} {len(ends):3d} {len(puts):3d}  {100 * len(ivr) / len(rs):3.0f}  {100 * np.mean(rate or [np.nan]):5.0f}  "
           f"{len(tk):4d}  {np.mean(dur or [np.nan]):5.2f}  {by_s[:44]:44s}  {sum(r['iv'] for r in puts):5d}  "
-          f"{100 * np.mean([r.get('clip', 0) > 0 for r in ivr] or [np.nan]):5.1f}  {100 * np.mean([r.get('near', False) for r in rs]):5.1f}  "
+          f"{100 * np.mean([r.get('clip', 0) > 0 for r in ivr] or [np.nan]):5.1f}  {100 * np.mean([r.get('near', False) for r in rs]):5.1f}  {sum(r.get('refused', 0) for r in rs):3d}  "
           f"{np.percentile(g, 99):5.0f} {g.max():5.0f} {100 * np.mean([r['late'] for r in rs]):5.1f}  {np.nanmedian(ik):.2f}    "
           f"{np.nanmedian(j):.1f}/{np.nanpercentile(j, 99):.1f}")
 ends = collections.Counter(r["why"].split(" (")[0][:60] for r in rows if r["term"] or r["trunc"])
