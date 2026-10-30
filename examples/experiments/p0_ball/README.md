@@ -68,3 +68,11 @@ examples/experiments/p0_ball/run_actor.sh --checkpoint_path runs/<run>_actor
 .venv/bin/python examples/experiments/p0_ball/hil_report.py <session>/hil.jsonl
 ```
 A run resumes from its checkpoint folder (no prompt).
+
+## Rehearsal 2 (fake bridge, 2026-10-30, 95 min unattended, learner Slurm 993 `p0ball_fake_r2c`)
+718 episodes, 32.3k decisions, 3.8 updates per transition. No learning curve: low put-backs per 15 min 2, 0, 0, 3, 9, 2, 2,
+all 18 with the intervener in control (13 in the last takeover after the budget); intervention rate flat at 76-85 % of
+steps; ~3 takeovers per episode, mean 1.1 s (p90 2.2 s), triggers dive 1129, box_xy 664, press 318, box_z 75, near 73;
+104 budget quits, 8 takeovers over 4 s. Learner-driven HOLDs 0 (1 refused target replaced), intervener HOLDs 10; 50 press
+hand-backs > 1.2 kg (max 3.06 kg), 47 with the intervener in control; 263 high-drop put-backs (scale ok, not low: 0).
+4 % of the intervened IK elements clipped. Client 50 Hz, p99 20.1 ms.
