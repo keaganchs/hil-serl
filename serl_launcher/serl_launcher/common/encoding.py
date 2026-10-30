@@ -70,3 +70,16 @@ class EncodingWrapper(nn.Module):
             encoded = jnp.concatenate([encoded, state], axis=-1)
 
         return encoded
+
+
+class StateEncoder(nn.Module):
+    """State-only observations (P0 rig): {"state": [..., T, D]} -> [..., T*D], normalised by fixed statistics
+    (the base policy's obs normaliser, as rsl_rl's EmpiricalNormalization: (x - mean) / (std + 1e-2))."""
+
+    mean: tuple  # tuples, not arrays: the module must stay hashable (jit's static apply_fn)
+    std: tuple
+
+    @nn.compact
+    def __call__(self, observations, train=False, stop_gradient=False, is_encoded=False):
+        x = (observations["state"] - jnp.asarray(self.mean)) / (jnp.asarray(self.std) + 1e-2)
+        return x.reshape(x.shape[:-2] + (-1,))

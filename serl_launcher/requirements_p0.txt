@@ -1,0 +1,29 @@
+# P0 rig port: a resolvable pinned set (requirements.txt's tensorflow>=2.15 conflicts with jax 0.4.35 via ml-dtypes).
+# JAX itself is installed separately: "jax[cuda12]==0.4.35" on Sinabox (learner), "jax[cpu]==0.4.35" on the robot computer (actor).
+# jax stays at 0.4.35: the code uses jax.sharding.PositionalSharding and jax.tree_map, removed in later versions.
+flax==0.8.5
+distrax==0.1.5
+chex==0.1.90
+optax==0.2.5
+orbax-checkpoint==0.11.5
+ml-collections==1.1.0
+ml-dtypes==0.4.1
+tensorflow-cpu==2.18.0
+tf-keras==2.18.0
+tensorflow-probability==0.25.0
+numpy==1.26.4
+scipy==1.11.4
+einops==0.8.2
+gym==0.26.2
+gymnasium==0.29.1
+absl-py==2.5.1
+natsort==8.4.0
+matplotlib==3.10.9
+tqdm==4.70.1
+imageio==2.38.0
+pyzmq==27.2.0
+lz4==4.4.5
+opencv-python-headless==4.11.0.86
+wandb==0.31.0
+typing-extensions==4.16.0
+agentlace @ git+https://github.com/youliangtan/agentlace.git@cf2c337c5e3694cdbfc14831b239bd657bc4894d

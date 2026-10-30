@@ -192,6 +192,58 @@ def make_sac_pixel_agent_hybrid_dual_arm(
     return agent
 
 
+def make_sac_state_agent(
+    seed,
+    sample_obs,
+    sample_action,
+    obs_mean,
+    obs_std,
+    reward_bias=0.0,
+    target_entropy=None,
+    discount=0.97,
+):
+    """The pixel agent's SAC (same networks and settings) on state-only observations (P0 rig: no camera)."""
+    from functools import partial
+
+    from serl_launcher.common.encoding import StateEncoder
+    from serl_launcher.networks.actor_critic_nets import Critic, Policy, ensemblize
+    from serl_launcher.networks.lagrange import GeqLagrangeMultiplier
+    from serl_launcher.networks.mlp import MLP
+
+    encoder = StateEncoder(mean=tuple(map(float, obs_mean)), std=tuple(map(float, obs_std)))
+    mlp = dict(activations=nn.tanh, use_layer_norm=True, hidden_dims=[256, 256], activate_final=True)
+    critic_def = partial(Critic, encoder=encoder, network=ensemblize(partial(MLP, **mlp), 2)(name="critic_ensemble"))(
+        name="critic"
+    )
+    policy_def = Policy(
+        encoder=encoder,
+        network=MLP(**mlp),
+        action_dim=sample_action.shape[-1],
+        std_parameterization="exp",
+        std_min=1e-5,
+        std_max=5,
+        tanh_squash_distribution=True,
+        name="actor",
+    )
+    temperature_def = GeqLagrangeMultiplier(init_value=1e-2, constraint_shape=(), name="temperature")
+    return SACAgent.create(
+        jax.random.PRNGKey(seed),
+        sample_obs,
+        sample_action,
+        actor_def=policy_def,
+        critic_def=critic_def,
+        temperature_def=temperature_def,
+        discount=discount,
+        backup_entropy=False,
+        critic_ensemble_size=2,
+        critic_subsample_size=None,
+        image_keys=("state",),  # update() unpacks packed image batches only when image_keys[0] is missing
+        reward_bias=reward_bias,
+        target_entropy=target_entropy,
+        augmentation_function=None,
+    )
+
+
 def linear_schedule(step):
     init_value = 10.0
     end_value = 50.0
@@ -242,6 +294,7 @@ def make_wandb_logger(
     project: str = "hil-serl",
     description: str = "serl_launcher",
     debug: bool = False,
+    **overrides,
 ):
     wandb_config = WandBLogger.get_default_config()
     wandb_config.update(
@@ -249,6 +302,7 @@ def make_wandb_logger(
             "project": project,
             "exp_descriptor": description,
             "tag": description,
+            **overrides,
         }
     )
     wandb_logger = WandBLogger(

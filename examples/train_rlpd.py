@@ -27,10 +27,11 @@ from serl_launcher.utils.launcher import (
     make_sac_pixel_agent,
     make_sac_pixel_agent_hybrid_single_arm,
     make_sac_pixel_agent_hybrid_dual_arm,
+    make_sac_state_agent,
     make_trainer_config,
     make_wandb_logger,
 )
-from serl_launcher.data.data_store import MemoryEfficientReplayBufferDataStore
+from serl_launcher.data.data_store import MemoryEfficientReplayBufferDataStore, ReplayBufferDataStore
 
 from experiments.mappings import CONFIG_MAPPING
 
@@ -47,6 +48,7 @@ flags.DEFINE_integer("eval_checkpoint_step", 0, "Step to evaluate the checkpoint
 flags.DEFINE_integer("eval_n_trajs", 0, "Number of trajectories to evaluate.")
 flags.DEFINE_boolean("save_video", False, "Save video.")
 
+flags.DEFINE_string("bind_ip", None, "Learner: listen on this interface only (P0: Sinabox's Tailscale IP); default all.")
 flags.DEFINE_boolean(
     "debug", False, "Debug mode."
 )  # debug mode will disable wandb logging
@@ -261,6 +263,12 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
             wandb_logger.log(payload, step=step)
         return {}  # not expecting a response
 
+    if FLAGS.bind_ip:  # agentlace binds tcp://*: listen on the given interface only
+        import zmq
+
+        _bind = zmq.Socket.bind
+        zmq.Socket.bind = lambda self, addr: _bind(self, addr.replace("tcp://*:", f"tcp://{FLAGS.bind_ip}:"))
+
     # Create server
     server = TrainerServer(make_trainer_config(), request_callback=stats_callback)
     server.register_data_store("actor_env", replay_buffer)
@@ -286,18 +294,15 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
     print_green("sent initial network to actor")
 
     # 50/50 sampling from RLPD, half from demo and half from online experience
+    sample_args = {"batch_size": config.batch_size // 2}
+    if config.image_keys:
+        sample_args["pack_obs_and_next_obs"] = True
     replay_iterator = replay_buffer.get_iterator(
-        sample_args={
-            "batch_size": config.batch_size // 2,
-            "pack_obs_and_next_obs": True,
-        },
+        sample_args=sample_args,
         device=sharding.replicate(),
     )
     demo_iterator = demo_buffer.get_iterator(
-        sample_args={
-            "batch_size": config.batch_size // 2,
-            "pack_obs_and_next_obs": True,
-        },
+        sample_args=sample_args,
         device=sharding.replicate(),
     )
 
@@ -407,6 +412,17 @@ def main(_):
             discount=config.discount,
         )
         include_grasp_penalty = True
+    elif config.setup_mode == 'single-arm-state':
+        obs_mean, obs_std = config.obs_stats()
+        agent: SACAgent = make_sac_state_agent(
+            seed=FLAGS.seed,
+            sample_obs=env.observation_space.sample(),
+            sample_action=env.action_space.sample(),
+            obs_mean=obs_mean,
+            obs_std=obs_std,
+            discount=config.discount,
+        )
+        include_grasp_penalty = False
     else:
         raise NotImplementedError(f"Unknown setup mode: {config.setup_mode}")
 
@@ -428,32 +444,32 @@ def main(_):
         )[11:]
         print_green(f"Loaded previous checkpoint at step {ckpt_number}.")
 
-    def create_replay_buffer_and_wandb_logger():
-        replay_buffer = MemoryEfficientReplayBufferDataStore(
+    def make_buffer():
+        if not config.image_keys:  # state-only (P0)
+            return ReplayBufferDataStore(env.observation_space, env.action_space, capacity=config.replay_buffer_capacity)
+        return MemoryEfficientReplayBufferDataStore(
             env.observation_space,
             env.action_space,
             capacity=config.replay_buffer_capacity,
             image_keys=config.image_keys,
             include_grasp_penalty=include_grasp_penalty,
         )
+
+    def create_replay_buffer_and_wandb_logger():
+        replay_buffer = make_buffer()
         # set up wandb and logging
         wandb_logger = make_wandb_logger(
-            project="hil-serl",
-            description=FLAGS.exp_name,
+            project=getattr(config, "wandb_project", "hil-serl"),
+            description=os.path.basename(FLAGS.checkpoint_path.rstrip("/")) if FLAGS.checkpoint_path else FLAGS.exp_name,
             debug=FLAGS.debug,
+            **getattr(config, "wandb_overrides", {}),
         )
         return replay_buffer, wandb_logger
 
     if FLAGS.learner:
         sampling_rng = jax.device_put(sampling_rng, device=sharding.replicate())
         replay_buffer, wandb_logger = create_replay_buffer_and_wandb_logger()
-        demo_buffer = MemoryEfficientReplayBufferDataStore(
-            env.observation_space,
-            env.action_space,
-            capacity=config.replay_buffer_capacity,
-            image_keys=config.image_keys,
-            include_grasp_penalty=include_grasp_penalty,
-        )
+        demo_buffer = make_buffer()
 
         assert FLAGS.demo_path is not None
         for path in FLAGS.demo_path:
