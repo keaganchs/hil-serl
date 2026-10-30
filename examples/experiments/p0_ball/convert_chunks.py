@@ -1,6 +1,7 @@
 """Our rig / fake-bridge transition chunks (p0_grasping deploy/transitions.py, 50 Hz rows) -> HIL-SERL demo transitions
 at 10 Hz (the pickle list record_demos.py writes). Same rules as the client's HIL mode (p0_grasping deploy/hil.py):
-a decision = 5 consecutive ball ticks, its action = the mean of their executed actions, reward 1 and terminal at a low
+a decision = 5 consecutive ball ticks, its action = the mean of their executed actions in the learner's units (the IK
+part / socket_env.IK_SCALE, clipped to [-1, 1]; the clipped share is printed), reward 1 and terminal at a low
 put-back, terminal 0 at a failed attempt, truncated at 200 decisions or where the ball mode ended. Like record_demos.py,
 only episodes that end in a put-back are kept.
   .venv/bin/python examples/experiments/p0_ball/convert_chunks.py OUT.pkl SESSION_DIR [SESSION_DIR ...] [--episodes 20]
@@ -12,6 +13,7 @@ import os
 import pickle
 
 import numpy as np
+from socket_env import IK_SCALE
 
 REPEAT, MAX_STEPS = 5, 200
 OK = 0  # attempts.REASONS[0]
@@ -34,8 +36,15 @@ def episodes(r):
             s = i + 1
 
 
+def learner_units(a):
+    """An executed action [9] -> the learner's units (deploy/hil.py does the same): IK / IK_SCALE, clipped; (action, n clipped)."""
+    a = np.array(a, np.float32)
+    a[:6] /= IK_SCALE
+    return np.clip(a, -1, 1), int((np.abs(a[:6]) > 1).sum())
+
+
 def convert(r, limit=None):
-    out, n_ep, n_ok = [], 0, 0
+    out, n_ep, n_ok, n_clip = [], 0, 0, 0
     for s, e in episodes(r):
         n_ep += 1
         ok = bool(r["put"][e - 1])
@@ -51,13 +60,14 @@ def convert(r, limit=None):
             nxt = r["next_obs"][e - 1] if final else r["obs"][last]
             out.append(dict(
                 observations={"state": r["obs"][i][None].astype(np.float32)},
-                actions=r["action"][i:last].mean(0).astype(np.float32),
+                actions=(lu := learner_units(r["action"][i:last].mean(0)))[0],
                 next_observations={"state": nxt[None].astype(np.float32)},
                 rewards=float(final),
                 masks=0.0 if final else 1.0,
                 dones=final,
             ))
-    return out, n_ep, n_ok
+            n_clip += lu[1] > 0
+    return out, n_ep, n_ok, n_clip
 
 
 if __name__ == "__main__":
@@ -71,9 +81,9 @@ if __name__ == "__main__":
         r = rows(sess)
         if r is None or left == 0:
             continue
-        d, n_ep, n_ok = convert(r, left)
+        d, n_ep, n_ok, n_clip = convert(r, left)
         demos += d
         left = None if left is None else left - n_ok
-        print(f"{sess}: {n_ep} episodes, {n_ok} put-backs kept, {len(d)} transitions")
+        print(f"{sess}: {n_ep} episodes, {n_ok} put-backs kept, {len(d)} transitions, {n_clip} with a clipped IK action")
     pickle.dump(demos, open(a.out, "wb"))
     print(f"{len(demos)} transitions -> {a.out}")

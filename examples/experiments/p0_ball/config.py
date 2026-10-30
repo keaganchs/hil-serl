@@ -8,7 +8,7 @@ import os
 import numpy as np
 
 from experiments.config import DefaultTrainingConfig
-from experiments.p0_ball.socket_env import P0SocketEnv
+from experiments.p0_ball.socket_env import IK_SCALE, P0SocketEnv
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,7 +22,12 @@ class TrainConfig(DefaultTrainingConfig):
     batch_size = 256
     cta_ratio = 2
     training_starts = 100
-    steps_per_update = 500  # publish every ~2 s: the state-only learner runs ~230 steps/s on a shard (the image one ~10/s)
+    steps_per_update = 50  # their default: publish every 2.5 s at the max_utd cap (20 learner steps/s at 10 Hz)
+    # gradient updates per online transition (train_rlpd.py learner waits beyond it): HIL-SERL's own learner, measured
+    # (bench_image_learner.py) at 1.2 on a busy A5000 shard, ~3-4x that on their RTX 4090 alone -> 4. Uncapped, the
+    # state-only learner ran ~300 per transition (rehearsal 1)
+    max_utd = 4
+    ik_scale = IK_SCALE  # the client scales the learner's 6 IK actions by this (deploy/hil.py HilCfg.ik_scale; README)
     buffer_period = 1000
     checkpoint_period = 5000
     replay_buffer_capacity = 200000

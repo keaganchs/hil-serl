@@ -4,9 +4,10 @@ both sides, so the client's venv needs nothing new) at the 10 Hz decision rate.
 
 client -> env, one message per decision step (pickled dict):
   obs [112] f32         the ball policy's actor input at the decision tick (raw)
-  first                 True: a new episode starts at this obs (reward/terminated/... are then ignored)
+  first                 True: a new episode starts at this obs (reward/terminated/... are then ignored); with ik_scale
   reward, terminated, truncated, info   the outcome of the step just finished
-  intervened, action    the step's stored action when the intervener had the arm (else the policy's own action ran)
+  intervened, action    the step's stored action when the intervener had the arm (else the policy's own action ran),
+                        in the learner's units: the executed IK part / IK_SCALE, clipped to [-1, 1]
 env -> client: {"action": [9] f32, "step": n}, the action for the decision just received.
 """
 
@@ -18,6 +19,7 @@ import gymnasium as gym
 import numpy as np
 
 OBS_DIM, ACT_DIM = 112, 9
+IK_SCALE = 0.5  # the client executes the learner's 6 IK actions x this (user 2026-10-30; README: deviations)
 
 
 class P0SocketEnv(gym.Env):
@@ -43,6 +45,7 @@ class P0SocketEnv(gym.Env):
     def reset(self, **kwargs):
         while not (m := self._recv())["first"]:  # a message of the last episode (sent before it ended) is dropped
             pass
+        assert m.get("ik_scale") == IK_SCALE, f"client ik_scale {m.get('ik_scale')} != {IK_SCALE}"
         return self._obs(m), {}
 
     def step(self, action):

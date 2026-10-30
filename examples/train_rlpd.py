@@ -316,9 +316,14 @@ def learner(rng, agent, replay_buffer, demo_buffer, wandb_logger=None):
         train_critic_networks_to_update = frozenset({"critic", "grasp_critic"})
         train_networks_to_update = frozenset({"critic", "grasp_critic", "actor", "temperature"})
 
+    n0 = len(replay_buffer) - config.training_starts  # max_utd: as if the learner had run while the first ones came in
     for step in tqdm.tqdm(
         range(start_step, config.max_steps), dynamic_ncols=True, desc="learner"
     ):
+        # P0 (config.max_utd): at most max_utd gradient updates per online transition, HIL-SERL's own rate (their image
+        # learner is that slow; the state-only one would otherwise run ~300 per transition)
+        while getattr(config, "max_utd", None) and (step - start_step + 1) * config.cta_ratio > config.max_utd * (len(replay_buffer) - n0):
+            time.sleep(0.01)
         # run n-1 critic updates and 1 critic + actor update.
         # This makes training on GPU faster by reducing the large batch transfer time from CPU to GPU
         for critic_step in range(config.cta_ratio - 1):

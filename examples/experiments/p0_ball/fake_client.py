@@ -9,6 +9,7 @@ import time
 import socket
 
 import numpy as np
+from socket_env import IK_SCALE
 
 p = argparse.ArgumentParser()
 p.add_argument("--port", type=int, default=5590)
@@ -33,7 +34,7 @@ if a.write_demos:
 u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s = type("S", (), {"send": lambda self, b: u.sendto(b, ("127.0.0.1", a.port)), "recv": lambda self: u.recv(65536)})()
 lat, t_ep = [], 0
-s.send(pickle.dumps({"obs": obs(), "first": True}))
+s.send(pickle.dumps({"obs": obs(), "first": True, "ik_scale": IK_SCALE}))
 for k in range(a.steps):
     t = time.perf_counter()
     reply = pickle.loads(s.recv())
@@ -48,7 +49,7 @@ for k in range(a.steps):
     s.send(pickle.dumps(msg))
     if end:
         t_ep = 0
-        s.send(pickle.dumps({"obs": obs(), "first": True}))
+        s.send(pickle.dumps({"obs": obs(), "first": True, "ik_scale": IK_SCALE}))
 big = [(k, round(1e3 * v)) for k, v in enumerate(lat) if v > 0.02]
 print("slow replies (step, ms):", big[:40])
 lat = 1e3 * np.array(lat[5:])
