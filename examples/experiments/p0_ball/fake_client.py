@@ -6,8 +6,9 @@ import argparse
 import pickle
 import time
 
+import socket
+
 import numpy as np
-import zmq
 
 p = argparse.ArgumentParser()
 p.add_argument("--port", type=int, default=5590)
@@ -29,8 +30,8 @@ if a.write_demos:
     pickle.dump(demos, open(a.write_demos, "wb"))
     raise SystemExit
 
-s = zmq.Context().socket(zmq.PAIR)
-s.connect(f"tcp://127.0.0.1:{a.port}")
+u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s = type("S", (), {"send": lambda self, b: u.sendto(b, ("127.0.0.1", a.port)), "recv": lambda self: u.recv(65536)})()
 lat, t_ep = [], 0
 s.send(pickle.dumps({"obs": obs(), "first": True}))
 for k in range(a.steps):
